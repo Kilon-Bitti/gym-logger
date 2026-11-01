@@ -166,6 +166,9 @@ function check(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   // offline: entry queued, then synced
   mode = 'offline';
   await tap('Other exercise…');
+  check(await page.locator('.list h3', { hasText: 'Done today' }).count() === 1
+    && await page.locator('.list').last().locator('.label', { hasText: /^Leg press$/ }).count() === 1,
+    'exercises done today offered for another round');
   await page.locator('.other input').fill('Cable crunch'); await tap('Add');
   await page.locator('.other input').fill('20'); await tap('OK');
   await page.locator('.other input').fill('15'); await tap('OK');

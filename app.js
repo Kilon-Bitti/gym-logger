@@ -5,7 +5,7 @@
 // - All text is inserted with textContent / text nodes, never as HTML.
 import * as L from './logic.js';
 
-const VERSION = 4; // shown on the home screen; keep equal to the number in sw.js CACHE
+const VERSION = 5; // shown on the home screen; keep equal to the number in sw.js CACHE
 const API = 'https://api.github.com';
 const KEYS = { settings: 'gl.settings', cache: 'gl.cache', pending: 'gl.pending', workout: 'gl.workout' };
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -335,6 +335,11 @@ function chooseExerciseScreen() {
     const top = new Set(ranked.slice(0, 4));
     const all = L.exercisesByRecency(rows, cache.exercises).filter((n) => !done.has(n) && !top.has(n));
     main.append(h('section', { class: 'list' }, all.map((n) => btn(n, () => start(n), 'small'))));
+    // Exercises already done today stay available for another round, listed last.
+    if (done.size) {
+      main.append(h('section', { class: 'list' }, h('h3', null, 'Done today, another round:'),
+        [...done].map((n) => btn(n, () => start(n), 'small'))));
+    }
     const input = h('input', { type: 'text', placeholder: 'New exercise name (English)', autocomplete: 'off', maxlength: 80 });
     const err = h('p', { class: 'error', hidden: true });
     const add = () => {
