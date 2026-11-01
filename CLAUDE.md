@@ -27,7 +27,12 @@ owner's private GitHub repo through the GitHub API. Hosted with GitHub Pages fro
 - `app.js` – UI, GitHub API, sync queue, rest timer.
 - `index.html`, `style.css`, `manifest.webmanifest`, `sw.js`, `icon-*.png`.
 - `tools/make_icons.py` – regenerates icons (stdlib only).
-- Test: `node --test`. Syntax check: `node --check app.js`.
+- Unit tests: `node --test`. Syntax check: `node --check app.js`.
+- Browser test: `node e2e/run.cjs` (headless Chromium via the pre-installed Playwright,
+  approved by the owner for testing only; it is not an app dependency). It serves the
+  app locally, fakes the GitHub API and walks through a whole workout, offline queue,
+  write conflict, XSS attempt and offline start. Run it after UI changes.
+- Bump `CACHE` in `sw.js` when app files change.
 
 ## Log format (in the private repo)
 `log/YYYY.csv`, columns `date,order,exercise,sets,note`; sets like
