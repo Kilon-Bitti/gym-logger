@@ -1,6 +1,6 @@
 // Offline support for the app's own files only. Requests to other origins
 // (the GitHub API, with the token and private data) are never touched or cached.
-const CACHE = 'gym-log-v2';
+const CACHE = 'gym-log-v3';
 const SHELL = ['./', './index.html', './style.css', './app.js', './logic.js', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

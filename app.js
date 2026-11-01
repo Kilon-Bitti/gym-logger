@@ -20,6 +20,7 @@ let settings = read(KEYS.settings, { owner: '', repo: '', branch: 'main', token:
 let cache = read(KEYS.cache, { files: {}, exercises: [] }); // files: { path: { text, sha } }
 let pending = read(KEYS.pending, []); // [{ id, row }] saved locally, not yet on GitHub
 let workout = read(KEYS.workout, null);
+if (workout && workout.current && workout.current.step === 'timer') workout.current.step = 'load';
 const ui = { settingsOpen: false, showAll: false, status: 'idle', statusMsg: '' };
 let rowsMemo = null;
 
@@ -207,8 +208,8 @@ function lastSummary(name) {
 }
 
 // A question with one big recommended answer, smaller alternatives and an "Other" input.
-function question(title, { recommended, alternatives, label, onpick, other }) {
-  const box = h('section', { class: 'question' }, h('h3', null, title));
+function question(title, { recommended, alternatives, label, onpick, other, hint }) {
+  const box = h('section', { class: 'question' }, h('h3', null, title), hint && h('p', { class: 'muted' }, hint));
   if (recommended != null) box.append(btn(label(recommended), () => onpick(recommended), 'primary big'));
   if (alternatives.length) box.append(h('div', { class: 'grid' }, alternatives.map((a) => btn(label(a), () => onpick(a)))));
   if (other) {
@@ -381,10 +382,24 @@ function exerciseScreen() {
       last && last.note && h('p', { class: 'note' }, last.note),
       cur.sets.length > 0 && h('p', null, `Today: ${L.formatSets(cur.sets)}`)));
 
+  // During the rest the next set's weight can already be chosen; the countdown stays on top.
+  if (resting()) {
+    main.append(h('section', { class: 'timer', id: 'timer' },
+      h('p', { id: 'countdown', class: 'countdown' }, ''),
+      btn('+30 s', () => {
+        cur.timerEnd = Math.max(cur.timerEnd, Date.now()) + 30000;
+        cur.sets[cur.sets.length - 1].rest += 30;
+        saveWorkout();
+        tick();
+      }, 'small')));
+  }
+
   if (cur.step === 'load') {
     const rec = L.suggestLoad(last, cur.sets);
+    const reps = L.suggestReps(last, cur.sets);
     main.append(question(`Weight for set ${n}?`, {
       recommended: rec,
+      hint: reps != null ? `Suggested reps: ${reps}` : null,
       alternatives: L.loadOptions(rows, cur.exercise, rec, cur.sets),
       label: loadLabel,
       onpick: (v) => update(() => { cur.load = v; cur.step = 'reps'; }),
@@ -395,11 +410,13 @@ function exerciseScreen() {
     const rec = L.suggestReps(last, cur.sets);
     main.append(question(`${loadLabel(cur.load)}: reps done?`, {
       recommended: rec,
+      hint: resting() ? 'Tap after the set.' : null,
       alternatives: L.repOptions(rec),
       label: String,
       onpick: (v) => update(() => {
         cur.sets.push({ load: cur.load, reps: v, rest: null });
         cur.load = null;
+        cur.timerEnd = null;
         cur.step = 'rest';
       }),
       other: { inputmode: 'numeric', placeholder: 'reps', parse: (s) => L.normInt(s, 999), error: 'Enter a whole number.' },
@@ -410,23 +427,9 @@ function exerciseScreen() {
       recommended: rec,
       alternatives: L.restOptions(rec),
       label: restLabel,
-      onpick: (v) => { unlockAudio(); update(() => pickRest(v)); },
+      onpick: (v) => update(() => pickRest(v)),
       other: { inputmode: 'numeric', placeholder: 'seconds', parse: (s) => L.normInt(s, 3600), error: 'Enter seconds.' },
     }));
-  } else if (cur.step === 'timer') {
-    main.append(h('section', { class: 'timer', id: 'timer' },
-      h('p', { id: 'countdown', class: 'countdown' }, ''),
-      h('p', { class: 'muted' }, `Next: set ${cur.sets.length + 1}`)));
-    main.append(
-      btn('Next set', () => update(() => { cur.step = 'load'; cur.timerEnd = null; }), 'primary big'),
-      h('div', { class: 'grid' },
-        btn('+30 s', () => {
-          cur.timerEnd += 30000;
-          cur.sets[cur.sets.length - 1].rest += 30;
-          saveWorkout();
-          tick();
-        }),
-        btn('Finish exercise', () => update(finishSets))));
   } else if (cur.step === 'note') {
     main.append(noteQuestion(last));
   }
@@ -441,7 +444,7 @@ function pickRest(v) {
   if (v === 'none') { lastSet.rest = null; cur.step = 'load'; return; }
   lastSet.rest = v;
   cur.timerEnd = Date.now() + v * 1000;
-  cur.step = 'timer';
+  cur.step = 'load';
 }
 
 // The rest after the final set is not recorded (same as in the original log).
@@ -485,34 +488,15 @@ function saveExercise(noteInput) {
   syncPending();
 }
 
-// ---------- Rest timer: countdown, keep screen on, beep ----------
+// ---------- Rest timer: countdown and keep the screen on (no sound, by owner's choice) ----------
 
 let timerInterval = null;
-let beepedFor = null;
 let wakeLock = null;
-let audioCtx = null;
 
-function unlockAudio() {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-  } catch { /* audio not available */ }
-}
-
-function beep() {
-  if (!audioCtx) return;
-  try {
-    const t = audioCtx.currentTime;
-    for (let i = 0; i < 3; i++) {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.frequency.value = 880;
-      g.gain.value = 0.25;
-      o.connect(g).connect(audioCtx.destination);
-      o.start(t + i * 0.35);
-      o.stop(t + i * 0.35 + 0.2);
-    }
-  } catch { /* ignore */ }
+// True while a rest countdown is shown (from choosing the rest until the next set's reps are entered).
+function resting() {
+  const cur = workout && workout.current;
+  return Boolean(cur && cur.timerEnd != null && (cur.step === 'load' || cur.step === 'reps'));
 }
 
 async function keepAwake(on) {
@@ -530,17 +514,14 @@ async function keepAwake(on) {
 function tick() {
   const cur = workout && workout.current;
   const el = document.getElementById('countdown');
-  if (!cur || cur.step !== 'timer' || !el) return;
+  if (!resting() || !el) return;
   const left = Math.max(0, Math.ceil((cur.timerEnd - Date.now()) / 1000));
   el.textContent = left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'Rest over';
-  if (left === 0) {
-    document.getElementById('timer').classList.add('done');
-    if (beepedFor !== cur.timerEnd) { beepedFor = cur.timerEnd; beep(); }
-  }
+  if (left === 0) document.getElementById('timer').classList.add('done');
 }
 
 function manageTimer() {
-  const timing = Boolean(workout && workout.current && workout.current.step === 'timer');
+  const timing = resting();
   if (timing && !timerInterval) timerInterval = setInterval(tick, 250);
   if (!timing && timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   keepAwake(timing);

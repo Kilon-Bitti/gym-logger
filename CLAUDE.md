@@ -12,6 +12,20 @@ owner's private GitHub repo through the GitHub API. Hosted with GitHub Pages fro
   and the Node/Python standard libraries are fine.
 - Consider security in every change; report trade-offs that matter to the owner.
 
+## Owner's device and field-test results
+- iPhone 16e, latest iOS (as of Nov 2026). App added to the home screen from Chrome
+  and run as a home-screen web app (iOS web apps always use WebKit, also from Chrome).
+- 2026-11-01 field test: real saves to GitHub, offline queue + retry, and resuming
+  after closing the app all worked. Screen Wake Lock keeps the screen on during the
+  rest countdown.
+- Web Audio beeps did not play (phone not in silent mode). The owner does not want
+  sound: the rest timer is visual only. Do not add sound back.
+
+## Workout flow
+Choose exercise → weight → reps → rest. Choosing a rest starts a countdown and
+immediately shows the next set's weight question (with suggested reps); the
+countdown stays on top until the reps of that set are entered.
+
 ## Security model
 - No dependencies, no build step. Only same-origin files plus `api.github.com`
   (enforced by the CSP meta tag in `index.html`; keep it strict).

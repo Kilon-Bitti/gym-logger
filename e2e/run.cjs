@@ -122,21 +122,25 @@ function check(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   await page.screenshot({ path: shots + '07-timer.png' });
   const cd = await page.locator('#countdown').textContent();
   check(/^0:5\d$/.test(cd), 'timer counting down (' + cd + ')');
-  await tap('Next set');
-  // reload mid-exercise: state must survive
+  // during the countdown the next set's weight is asked, with suggested reps shown
+  check(await primaryText() === '101 kg', 'set 2 weight asked during countdown (101 kg)');
+  check(await page.locator('.question .muted').textContent() === 'Suggested reps: 20', 'suggested reps shown during countdown');
+  // reload mid-rest: state and countdown must survive
   await page.reload(); await page.waitForSelector('.setno');
   check((await page.locator('.setno').textContent()) === 'Set 2', 'state survives reload (Set 2)');
-  check(await primaryText() === '101 kg', 'set 2 weight suggestion 101 kg');
+  check(/^0:5\d$/.test(await page.locator('#countdown').textContent()), 'countdown survives reload');
   // use "Other" with decimal comma, then undo it
   await page.locator('.other input').fill('102,5'); await tap('OK');
   check((await page.locator('.question h3').textContent()).startsWith('102.5 kg'), 'decimal comma accepted (102,5 → 102.5)');
+  check(await page.locator('#countdown').count() === 1, 'countdown still shown while waiting for reps');
+  await page.screenshot({ path: shots + '08-reps-during-rest.png' });
   await tap('Undo');
   await tapPrimary(); await tapPrimary();             // 101 kg, 20 reps
+  check(await page.locator('#countdown').count() === 0, 'countdown gone after reps entered');
   await page.locator('.other input').fill('3'); await tap('OK'); // 3 s rest
   await page.waitForTimeout(3800);
   check((await page.locator('#countdown').textContent()) === 'Rest over' && await page.locator('#timer.done').count() === 1, 'timer reaches Rest over');
-  await page.screenshot({ path: shots + '08-rest-over.png' });
-  await tap('Next set');
+  await page.screenshot({ path: shots + '08b-rest-over.png' });
   await tapPrimary(); await tapPrimary();             // 101, 20
   check(await primaryText() === 'Finish exercise', 'after set 3 recommends Finish exercise');
   await tapPrimary();
@@ -152,7 +156,7 @@ function check(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   check(await primaryText() === 'Lat pulldown', 'then recommends Lat pulldown');
   await page.screenshot({ path: shots + '10-choose2.png' });
   await tapPrimary();
-  for (let i = 0; i < 3; i++) { await tapPrimary(); await tapPrimary(); await tapPrimary(); if (i < 2) await tap('Next set'); }
+  for (let i = 0; i < 3; i++) { await tapPrimary(); await tapPrimary(); await tapPrimary(); } // weight, reps, rest (finish after set 3)
   conflictOnce = true;
   await tapPrimary(); // No note
   await page.waitForFunction(() => document.getElementById('status').textContent.includes('All saved'));
@@ -163,7 +167,6 @@ function check(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   mode = 'offline';
   await tap('Other exercise…');
   await page.locator('.other input').fill('Cable crunch'); await tap('Add');
-  await tapPrimary().catch(() => {});
   await page.locator('.other input').fill('20'); await tap('OK');
   await page.locator('.other input').fill('15'); await tap('OK');
   await tap('Finish exercise');
