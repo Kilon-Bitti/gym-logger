@@ -52,6 +52,13 @@ input, textarea {
   width: 100%; font: inherit; font-size: 18px; color: var(--text); background: var(--panel);
   border: 1px solid var(--line); border-radius: 10px; padding: 12px;
 }
+input { min-width: 0; max-width: 100%; }
+/* iOS WebKit gives date inputs an intrinsic min-width that overflows the column. */
+input[type="date"] {
+  -webkit-appearance: none; appearance: none; display: block;
+  min-height: 52px; text-align: left;
+}
+input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .other { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
 .other .btn { min-width: 72px; align-items: center; }
 .error { color: var(--bad); font-size: 15px; }
