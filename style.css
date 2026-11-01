@@ -63,3 +63,4 @@ input, textarea {
 .timer .btn { width: auto; min-width: 96px; align-items: center; }
 .timer.done { background: var(--ok); }
 .timer.done .countdown { color: #04260f; font-size: 36px; }
+.version { text-align: center; margin-top: 12px; }

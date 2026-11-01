@@ -46,7 +46,12 @@ countdown stays on top until the reps of that set are entered.
   approved by the owner for testing only; it is not an app dependency). It serves the
   app locally, fakes the GitHub API and walks through a whole workout, offline queue,
   write conflict, XSS attempt and offline start. Run it after UI changes.
-- Bump `CACHE` in `sw.js` when app files change.
+- On every app change bump `VERSION` in `app.js` and `CACHE` in `sw.js` to the same
+  number (the home screen shows "App version N").
+- After pushing, check that GitHub Pages actually published it: the
+  "pages build and deployment" run must succeed and
+  https://kilon-bitti.github.io/gym-logger/sw.js must show the new CACHE. If the
+  run failed (e.g. "in progress deployment"), re-run it.
 
 ## Log format (in the private repo)
 `log/YYYY.csv`, columns `date,order,exercise,sets,note`; sets like

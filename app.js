@@ -5,6 +5,7 @@
 // - All text is inserted with textContent / text nodes, never as HTML.
 import * as L from './logic.js';
 
+const VERSION = 4; // shown on the home screen; keep equal to the number in sw.js CACHE
 const API = 'https://api.github.com';
 const KEYS = { settings: 'gl.settings', cache: 'gl.cache', pending: 'gl.pending', workout: 'gl.workout' };
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -308,7 +309,8 @@ function homeScreen() {
       h('ul', null, last.rows.map((r) => h('li', null, `${r.exercise}: ${setsShort(r.sets)}`)))),
     h('div', { class: 'grid' },
       btn('Refresh data', () => refreshData()),
-      btn('Settings', () => { ui.settingsOpen = true; render(); })));
+      btn('Settings', () => { ui.settingsOpen = true; render(); })),
+    h('p', { class: 'muted version' }, `App version ${VERSION}`));
 }
 
 function chooseExerciseScreen() {
