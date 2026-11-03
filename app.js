@@ -5,7 +5,7 @@
 // - All text is inserted with textContent / text nodes, never as HTML.
 import * as L from './logic.js';
 
-const VERSION = 6; // shown on the home screen; keep equal to the number in sw.js CACHE
+const VERSION = 7; // shown on the home screen; keep equal to the number in sw.js CACHE
 const API = 'https://api.github.com';
 const KEYS = { settings: 'gl.settings', cache: 'gl.cache', pending: 'gl.pending', workout: 'gl.workout' };
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -22,7 +22,7 @@ let cache = read(KEYS.cache, { files: {}, exercises: [] }); // files: { path: { 
 let pending = read(KEYS.pending, []); // [{ id, row }] saved locally, not yet on GitHub
 let workout = read(KEYS.workout, null);
 if (workout && workout.current && workout.current.step === 'timer') workout.current.step = 'load';
-const ui = { settingsOpen: false, showAll: false, status: 'idle', statusMsg: '' };
+const ui = { homeDate: null, settingsOpen: false, showAll: false, status: 'idle', statusMsg: '' };
 let rowsMemo = null;
 
 const configured = () => Boolean(settings.owner && settings.repo && settings.branch && settings.token);
@@ -282,19 +282,43 @@ function settingsScreen() {
     btn('Forget token and data on this phone', forget, 'danger'));
 }
 
+// A workout's starting state for date d (exercises already logged that day count as done).
+function newWorkout(d, autoDate) {
+  const already = allRows().filter((r) => r.date === d);
+  return {
+    date: d,
+    autoDate, // true = date was the default "today", not picked by hand
+    done: already.sort((a, b) => a.order - b.order).map((r) => r.exercise),
+    nextOrder: already.reduce((m, r) => Math.max(m, r.order), 0) + 1,
+    current: null,
+    undo: [],
+  };
+}
+
+// The app may stay in memory overnight (or a workout may be started and left
+// untouched). Keep the default date on today: an empty workout that got the
+// default date on an earlier day moves to today. Returns true if it changed.
+function rollToToday() {
+  const today = todayIso();
+  if (!workout || !workout.autoDate || workout.date >= today) return false;
+  if (workout.done.length || (workout.current && workout.current.sets.length)) return false;
+  const fresh = newWorkout(today, true);
+  Object.assign(workout, { date: fresh.date, done: fresh.done, nextOrder: fresh.nextOrder });
+  if (workout.current) workout.current.order = fresh.nextOrder;
+  saveWorkout();
+  return true;
+}
+
 function homeScreen() {
-  const date = h('input', { type: 'date', value: todayIso(), max: '2100-12-31' });
+  // ui.homeDate is set only when the date is picked by hand; otherwise it follows today.
+  const date = h('input', { type: 'date', value: ui.homeDate || todayIso(), max: '2100-12-31' });
+  date.addEventListener('change', () => { ui.homeDate = date.value === todayIso() ? null : date.value; });
   const start = () => {
-    const d = date.value;
+    const auto = !ui.homeDate;
+    const d = auto ? todayIso() : date.value; // read today now, not when the screen was drawn
     if (!L.isValidDate(d)) return;
-    const already = allRows().filter((r) => r.date === d).sort((a, b) => a.order - b.order);
-    workout = {
-      date: d,
-      done: already.map((r) => r.exercise),
-      nextOrder: already.reduce((m, r) => Math.max(m, r.order), 0) + 1,
-      current: null,
-      undo: [],
-    };
+    workout = newWorkout(d, auto);
+    ui.homeDate = null;
     saveWorkout();
     render();
   };
@@ -326,7 +350,8 @@ function chooseExerciseScreen() {
   };
   const main = h('main', null,
     h('h2', null, `Exercise ${workout.done.length + 1}`),
-    h('p', { class: 'muted' }, fmtDate(workout.date) + (workout.done.length ? `  ·  Done: ${workout.done.join(', ')}` : '')));
+    h('p', { class: 'muted' }, fmtDate(workout.date) + (workout.done.length ? `  ·  Done: ${workout.done.join(', ')}` : '')),
+    workout.date !== todayIso() && h('p', { class: 'note' }, `⚠ Logging to ${fmtDate(workout.date)}, not today.`));
   if (ranked.length) main.append(btn(ranked[0], () => start(ranked[0]), 'primary big', lastSummary(ranked[0])));
   ranked.slice(1, 4).forEach((n) => main.append(btn(n, () => start(n), '', lastSummary(n))));
 
@@ -575,6 +600,8 @@ document.getElementById('status').addEventListener('click', () => {
 window.addEventListener('online', () => syncPending());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  // Back from the background, possibly on a new day: refresh the date shown.
+  if (rollToToday() || !workout || !workout.current) softRender();
   manageTimer();
   syncPending();
 });
@@ -583,5 +610,6 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
+rollToToday();
 render();
 refreshData();

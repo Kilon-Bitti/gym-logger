@@ -184,6 +184,27 @@ function check(cond, msg) { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
 
   await tap('Finish workout');
   await page.screenshot({ path: shots + '12-home-after.png' });
+  const endWorkout = () => page.locator('.btn.secondary', { hasText: /^(Cancel|Finish) workout$/ }).last().click();
+  // stale date: home screen drawn yesterday (app left in memory), Start pressed today
+  const yesterday = iso(daysAgo(1));
+  await page.evaluate((y) => { document.querySelector('main input[type=date]').value = y; }, yesterday);
+  await tap('Start workout');
+  check(JSON.parse(await page.evaluate(() => localStorage.getItem('gl.workout'))).date === today, 'stale default date on home screen replaced by today');
+  check(await page.locator('main .note', { hasText: 'not today' }).count() === 0, 'no date warning for today');
+  await endWorkout();
+  // a date picked by hand is kept, and warned about
+  await page.locator('main input[type=date]').fill(yesterday);
+  await tap('Start workout');
+  check(JSON.parse(await page.evaluate(() => localStorage.getItem('gl.workout'))).date === yesterday, 'hand-picked date kept');
+  check(await page.locator('main .note', { hasText: 'not today' }).count() === 1, 'warning shown when not logging to today');
+  await endWorkout();
+  // empty workout started yesterday with the default date moves to today on reopen
+  await page.evaluate((y) => localStorage.setItem('gl.workout', JSON.stringify({ date: y, autoDate: true, done: [], nextOrder: 1, current: null, undo: [] })), yesterday);
+  await page.reload(); await page.waitForSelector('h2');
+  const rolled = JSON.parse(await page.evaluate(() => localStorage.getItem('gl.workout')));
+  check(rolled.date === today && rolled.nextOrder === 4, 'empty workout from yesterday moved to today (after today\'s 3 exercises)');
+  await endWorkout();
+
   // XSS attempt via exercise name / note stays text
   await tap('Start workout'); await tap('Other exercise…');
   await page.locator('.other input').fill('<img src=x onerror=alert(1)>'); await tap('Add');
